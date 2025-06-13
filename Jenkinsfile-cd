@@ -1,0 +1,81 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Enter the image tag to deploy from ECR')
+    }
+
+    environment {
+        AWS_REGION = "us-east-1"
+        AWS_ACCOUNT_ID = "343218201141"
+        IMAGE_NAME = "pyapp"
+        REPO_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}"
+    }
+
+    stages {
+        stage('Login to AWS ECR') {
+            steps {
+                script {
+                    sh """
+                    echo "Logging into ECR..."
+                    aws ecr get-login-password --region ${AWS_REGION} | \
+                    docker login --username AWS --password-stdin ${REPO_URI}
+                    """
+                }
+            }
+        }
+
+        stage('Pull Docker Image from ECR') {
+            steps {
+                script {
+                    sh """
+                    echo "Pulling image: ${REPO_URI}:${params.IMAGE_TAG}"
+                    docker pull ${REPO_URI}:${params.IMAGE_TAG}
+                    """
+                }
+            }
+        }
+
+        stage('Stop Previous Container') {
+            steps {
+                script {
+                    sh """
+                    echo "Stopping existing container if running..."
+                    docker rm -f ${IMAGE_NAME} || true
+                    """
+                }
+            }
+        }
+
+        stage('Run Docker Container') {
+            steps {
+                script {
+                    sh """
+                    echo "Running new container..."
+                    docker run -d --name ${IMAGE_NAME} -p 80:3000 ${REPO_URI}:${params.IMAGE_TAG}
+                    """
+                }
+            }
+        }
+
+        stage('Cleanup Local Image (Optional)') {
+            steps {
+                script {
+                    sh """
+                    echo "Cleaning up local image..."
+                    docker rmi ${REPO_URI}:${params.IMAGE_TAG} || true
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Deployment successful! App is live on the EC2 instance."
+        }
+        failure {
+            echo "Deployment failed!"
+        }
+    }
+}
