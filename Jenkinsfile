@@ -44,6 +44,16 @@ pipeline {
             }
         }
     }
+        stage('Cleanup Local Image (Optional)') {
+            steps {
+                script {
+                    sh """
+                    echo "Cleaning up local image..."
+                    docker rmi ${REPO_URI}:${params.IMAGE_TAG} || true
+                    """
+                }
+            }
+        }
 
     post {
         success {
